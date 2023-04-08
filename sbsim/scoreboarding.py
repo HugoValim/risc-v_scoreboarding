@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass
 
+import pandas as pd
+
 
 @dataclass
 class InstructionType:
@@ -34,7 +36,7 @@ class ScoreboardingSIM:
 
     def execute(self):
         """Method to execute the simultor"""
-        self.functional_units_config = self.parse_file()
+        self.functional_units_config, self.instructions_to_execute = self.parse_file()
 
     def parse_file(self) -> tuple[dict, dict]:
         """Parse inputed file and build attributes"""
@@ -57,7 +59,13 @@ class ScoreboardingSIM:
 
     def build_instruction_status(self) -> None:
         """Build instruction table based in the inputed instructions"""
-        pass
+        stages = ["issue", "read", "ex", "write"]
+        instructions = [i for i in self.instructions_to_execute.keys()]
+        initialize_w_none = [None for i in range(len(instructions))]
+        table = {"instruction": instructions}
+        table_stages = {stage: initialize_w_none for stage in stages}
+        table.update(table_stages)
+        return pd.DataFrame(table)
 
     def build_functional_unit_status(self) -> None:
         """Build functional unit table based in the inputed Functional Units"""
@@ -73,11 +81,13 @@ class ScoreboardingSIM:
             "rj": None,
             "rk": None,
         }
-        for fu in self.functional_units.keys():
-            self.functional_unit_table[fu] = functional_unit_elements
-            self.functional_unit_table[fu]["n_cycles"] = self.functional_units[
-                "n_cycles"
-            ]
+        for fu in self.functional_units_config.keys():
+            for i in range(self.functional_units_config[fu]["n_units"]):
+                fu_idx = i + 1
+                self.functional_unit_table[fu + str(fu_idx)] = functional_unit_elements
+                self.functional_unit_table[fu + str(fu_idx)][
+                    "n_cycles"
+                ] = self.functional_units["n_cycles"]
 
     def build_register_status(self, regr: int = 32, regf: int = 32) -> None:
         """Build register table based in the inputed Functional Units"""

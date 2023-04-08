@@ -12,31 +12,48 @@ class InstructionType:
 
 
 class ScoreboardingSIM:
-
     OPCODE_MAP = {
-        "LW": (int, InstructionType.LOAD),
-        "LD": (float, InstructionType.LOAD),
-        "SW": (int, InstructionType.STORE),
-        "SD": (float, InstructionType.STORE),
-        "SUB": (int, InstructionType.ADD_SUB),
-        "SUBD": (float, InstructionType.ADD_SUB),
-        "ADD": (int, InstructionType.ADD_SUB),
-        "ADDD": (float, InstructionType.ADD_SUB),
-        "MULTD": (float, InstructionType.MULT),
-        "DIVD": (float, InstructionType.DIVD),
+        "ild": (int, InstructionType.LOAD),
+        "fld": (float, InstructionType.LOAD),
+        "isw": (int, InstructionType.STORE),
+        "fsd": (float, InstructionType.STORE),
+        "isub": (int, InstructionType.ADD_SUB),
+        "fsub": (float, InstructionType.ADD_SUB),
+        "iadd": (int, InstructionType.ADD_SUB),
+        "fadd": (float, InstructionType.ADD_SUB),
+        "fmul": (float, InstructionType.MULT),
+        "fdiv": (float, InstructionType.DIVD),
     }
 
     REG_PREFIXES = {"int": "r", "float": "f"}
 
-    def __init__(self, file_path: os.path) -> None:
-        self.parse_file(file_path)
+    FUNCTIONAL_UNITS = ["int", "mult", "add", "div"]
 
-    def parse_file(self, file_path: os.path) -> None:
+    def __init__(self, file_path: os.path) -> None:
+        self.file = file_path
+
+    def execute(self):
+        """Method to execute the simultor"""
+        self.functional_units_config = self.parse_file()
+
+    def parse_file(self) -> tuple[dict, dict]:
         """Parse inputed file and build attributes"""
-        with open(file_path, "r") as f:
+        functional_units_config = {}
+        instructions_to_execute = {}
+        with open(self.file, "r") as f:
             for line in f:
                 fields = line.strip().replace(",", " ").split()
-                print(fields)
+                if not fields:  # Skip blank lines
+                    continue
+                elif fields[0].lower() in self.FUNCTIONAL_UNITS:
+                    functional_units_config[fields[0]] = {}
+                    functional_units_config[fields[0]]["n_units"] = fields[1]
+                    functional_units_config[fields[0]]["n_cycle"] = fields[2]
+                    continue
+                elif fields[0].lower() in self.OPCODE_MAP:
+                    instructions_to_execute[fields[0]] = fields[1:]
+
+            return functional_units_config, instructions_to_execute
 
     def build_instruction_status(self) -> None:
         """Build instruction table based in the inputed instructions"""

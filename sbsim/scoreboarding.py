@@ -10,9 +10,9 @@ class ScoreboardingSIM:
 
     OPCODE_MAP = {
         "ild": "int",
-        "fld": "add",
+        "fld": "int",
         "isw": "int",
-        "fsd": "add",
+        "fsd": "int",
         "isub": "int",
         "fsub": "add",
         "iadd": "int",
@@ -50,6 +50,10 @@ class ScoreboardingSIM:
         """Get only the raw name of the instruction without its index"""
         return instruction.split("_")[0]
 
+    def get_fu_from_inst(self, instruction: str) -> str:
+        """Get the functional unit for the given instruction"""
+        return self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
+
     def parse_file(self) -> tuple[dict, dict]:
         """Parse inputed file and build functional units and instructions config"""
         functional_units_config = {}
@@ -77,7 +81,12 @@ class ScoreboardingSIM:
                     )
                     instructions_to_execute[instruction_with_index] = parsed_regs
                     if len(instructions_to_execute[instruction_with_index]) == 2:
-                        instructions_to_execute[instruction_with_index].append(None)
+                        if "sd" in instruction_with_index:
+                            instructions_to_execute[instruction_with_index].insert(
+                                0, None
+                            )
+                        else:
+                            instructions_to_execute[instruction_with_index].append(None)
 
             return functional_units_config, instructions_to_execute
 
@@ -91,31 +100,37 @@ class ScoreboardingSIM:
             for i in stages:
                 self.instruction_table[instruction][i] = None
 
+    def create_default_fu(self):
+        return_value = {}
+        functional_unit_elements = [
+            "busy",
+            "op",
+            "fi",
+            "fj",
+            "fk",
+            "qj",
+            "qk",
+            "rj",
+            "rk",
+            "reserved_by",
+            "n_cycles",
+            "done_cycles",
+            "finished",
+        ]
+        for i in functional_unit_elements:
+            return_value[i] = None
+        return return_value
+
     def build_functional_unit_status(self) -> None:
         """Build functional unit table based in the inputed Functional Units"""
         self.functional_unit_table = {}
-        self.functional_unit_elements = {
-            "busy": None,
-            "op": None,
-            "fi": None,
-            "fj": None,
-            "fk": None,
-            "qj": None,
-            "qk": None,
-            "rj": None,
-            "rk": None,
-            "reserved_by": None,
-            "n_units": 0,
-            "n_cycles": 0,
-            "done_cycles": 0,
-            "finished": None,
-        }
         for fu in self.functional_units_config.keys():
             self.functional_unit_table[fu] = []
             for i in range(self.functional_units_config[fu]["n_units"]):
-                dict_now = self.functional_unit_elements.copy()
-                dict_now["n_cycles"] = self.functional_units_config[fu]["n_cycles"]
-                self.functional_unit_table[fu].append(dict_now)
+                self.functional_unit_table[fu].append(self.create_default_fu())
+                self.functional_unit_table[fu][i][
+                    "n_cycles"
+                ] = self.functional_units_config[fu]["n_cycles"]
 
     def build_register_status(self, regr: int = 32, regf: int = 32) -> None:
         """Build register table based in the inputed Functional Units"""
@@ -137,172 +152,95 @@ class ScoreboardingSIM:
         self.build_functional_unit_status()
         self.build_register_status()
 
-    def issue_stage(self, lap: int):
+    def issue_stage(self, cycle: int, instruction: str) -> None:
         """Process the issue stage, making the needed check, basically the required F.U. mustn't busy and the dest register must no be free (avoiding WAW hazard)"""
-        issue_done_this_lap = False
-        previous_instruction_stage_status = True
-        for instruction in self.instruction_table:
-            if previous_instruction_stage_status is None:
-                break  # Issue must be done in order
-            if self.instruction_table[instruction]["issue"] is not None:
-                #  Issue already occured, skip this one
+        dest_register_idx = 0
+        source_register_1_idx = 1
+        source_register_2_idx = 2
+        dest_register = self.instructions_to_execute[instruction][dest_register_idx]
+        source_register_1 = self.instructions_to_execute[instruction][
+            source_register_1_idx
+        ]
+        source_register_2 = self.instructions_to_execute[instruction][
+            source_register_2_idx
+        ]
+        raw_functional_unit = self.get_fu_from_inst(instruction)
+        if self.issue_done_flag:
+            return
+        if self.instruction_table[instruction]["issue"] is not None:
+            #  Issue already occured, skip this one
+            return
+        if dest_register is not None:
+            if self.register_table[dest_register] is not None:
+                #  Dest register is busy
+                self.issue_done_flag = True
+                return
+        for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
+            if fu["busy"]:
+                # Functional Unit already in use
                 continue
-            if issue_done_this_lap:
-                break
-            for idx, fu in enumerate(
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ]
-            ):
-                if (
-                    self.register_table[self.instructions_to_execute[instruction][0]]
-                    is not None
-                ):
-                    # Check dest register to see whether it's busy or not
-                    continue
-                if fu["busy"]:
-                    # F.U. is busy, try another one
-                    continue
-                # Update register table
-                self.register_table[
-                    self.instructions_to_execute[instruction][0]
-                ] = instruction
+            # All checks done, now we can issu o/
 
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["busy"] = True
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["op"] = instruction
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["fi"] = self.instructions_to_execute[instruction][0]
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["fj"] = self.instructions_to_execute[instruction][1]
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["fk"] = self.instructions_to_execute[instruction][2]
-                if fu["fj"] is not None:
-                    self.functional_unit_table[
-                        self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                    ][idx]["qj"] = self.register_table[fu["fj"]]
-                    print(
-                        self.functional_unit_table[
-                            self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                        ][idx]["qj"]
-                    )
-                    if self.register_table[fu["fj"]] is not None:
-                        self.functional_unit_table[
-                            self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                        ][idx]["rj"] = 0
-                    else:
-                        self.functional_unit_table[
-                            self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                        ][idx]["rj"] = 1
-                else:
-                    self.functional_unit_table[
-                        self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                    ][idx]["rj"] = 1
-                if fu["fk"] is not None:
-                    self.functional_unit_table[
-                        self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                    ][idx]["qk"] = self.register_table[fu["fk"]]
-                    if self.register_table[fu["fk"]] is not None:
-                        self.functional_unit_table[
-                            self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                        ][idx]["rk"] = 0
-                    else:
-                        self.functional_unit_table[
-                            self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                        ][idx]["rk"] = 1
-                else:
-                    self.functional_unit_table[
-                        self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                    ][idx]["rk"] = 1
-                self.instruction_table[instruction][
-                    "issue"
-                ] = lap  # lap that the stage has occured
-                self.instruction_table[instruction]["processed"] = True
-                self.functional_unit_table[
-                    self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
-                ][idx]["reserved_by"] = instruction
-                issue_done_this_lap = True
-                break  # Take only one functional unit, of course
-            previous_instruction_stage_status = self.instruction_table[instruction][
-                "issue"
-            ]  # Store previous state
+            # Start by requesting the dest register in register table
 
-    def read_stage(self, lap: int) -> None:
+            if dest_register is not None:
+                self.register_table[dest_register] = instruction
+
+            # Now the functional Unit table
+            self.functional_unit_table[raw_functional_unit][idx][
+                "reserved_by"
+            ] = instruction
+            self.functional_unit_table[raw_functional_unit][idx]["busy"] = True
+            self.functional_unit_table[raw_functional_unit][idx][
+                "op"
+            ] = self.remove_instruction_idx(instruction)
+            self.functional_unit_table[raw_functional_unit][idx]["fi"] = dest_register
+            self.functional_unit_table[raw_functional_unit][idx][
+                "fj"
+            ] = source_register_1
+            self.functional_unit_table[raw_functional_unit][idx][
+                "fk"
+            ] = source_register_2
+            self.functional_unit_table[raw_functional_unit][idx][
+                "qj"
+            ] = self.register_table[source_register_1]
+            if self.register_table[source_register_1] is not None:
+                self.functional_unit_table[raw_functional_unit][idx]["rj"] = 0
+            else:
+                self.functional_unit_table[raw_functional_unit][idx]["rj"] = 1
+            if self.functional_unit_table[raw_functional_unit][idx]["fk"] is not None:
+                self.functional_unit_table[raw_functional_unit][idx][
+                    "qk"
+                ] = self.register_table[source_register_2]
+                if self.register_table[source_register_2] is not None:
+                    self.functional_unit_table[raw_functional_unit][idx]["rk"] = 0
+                else:
+                    self.functional_unit_table[raw_functional_unit][idx]["rk"] = 1
+            else:
+                self.functional_unit_table[raw_functional_unit][idx]["rk"] = 1
+
+            # Instruction table
+            self.instruction_table[instruction]["issue"] = cycle
+            self.instruction_table[instruction]["processed"] = True
+
+            # Set the flag to tell that one instruction already issued this cycle
+            self.issue_done_flag = True
+
+    def read_stage(self, cycle: int) -> None:
         """Process the read stage. Check if rk and rj are both 1, and make the reading if so"""
-        for fu in self.functional_unit_table.keys():
-            for fu_unit in self.functional_unit_table[fu]:
-                if fu_unit["rj"] == 1 and fu_unit["rk"] == 1:
-                    if self.instruction_table[fu_unit["reserved_by"]]["processed"]:
-                        continue  # An action already occured in thsi instruction in this lap
-                    self.instruction_table[fu_unit["reserved_by"]]["read"] = lap
-                    fu_unit["rj"] = 0
-                    fu_unit["rk"] = 0
+        pass
 
-    def execute_stage(self, lap: int) -> None:
+    def execute_stage(self, cycle: int) -> None:
         """Process the execution stage. Check the number of cycles needed for each F.U. and keep executing until reach this number of cycles"""
-        for fu in self.functional_unit_table.keys():
-            for fu_unit in self.functional_unit_table[fu]:
-                if fu_unit["reserved_by"] is None:
-                    continue  # This F.U. is not being used
-                if self.instruction_table[fu_unit["reserved_by"]]["processed"]:
-                    continue  # An action already occured in this instruction in this lap
-                if fu_unit["finished"]:
-                    continue  # Already fininished this unit
-                self.instruction_table[fu_unit["reserved_by"]]["ex"] = lap
-                if fu_unit["done_cycles"] == fu_unit["n_cycles"]:
-                    fu_unit["finished"] = True
-                fu_unit["done_cycles"] += 1
-                self.instruction_table[fu_unit["reserved_by"]]["processed"] = True
+        pass
 
-    def write_stage(self, lap: int) -> None:
+    def write_stage(self, cycle: int) -> None:
         """Process the write stage. Checks to see if the value calculated in the execute stage can be written (Avoid WAR hazard)."""
+        pass
 
-        def check_source_register(reg: str) -> bool:
-            """Method to check if a destination register is source for a instruction"""
-            for fu in self.functional_unit_table.keys():
-                for fu_unit in self.functional_unit_table[fu]:
-                    if reg == fu_unit["qj"] and fu_unit["rj"] == 1:
-                        return False
-                    if reg == fu_unit["qk"] and fu_unit["rk"] == 1:
-                        return False
-            return True
-
-        def update_source_registers(reg: str) -> None:
-            """Update the source register, sending the message that the source operand is now available"""
-            for fus in self.functional_unit_table.values():
-                for fu_unit in fus:
-                    if reg == fu_unit["qj"]:
-                        fu_unit["rj"] == 1
-                    if reg == fu_unit["qk"]:
-                        fu_unit["rk"] == 1
-
-        for fu in self.functional_unit_table.keys():
-            for idx, fu_unit in enumerate(self.functional_unit_table[fu]):
-                if fu_unit["reserved_by"] is None:
-                    continue  # This F.U. is not being used
-                if not fu_unit["finished"]:
-                    continue  # This F.U. is not ready
-                if self.instruction_table[fu_unit["reserved_by"]]["processed"]:
-                    continue  # An action already occured in this instruction in this lap
-                if check_source_register(fu_unit["fi"]):
-                    update_source_registers(fu_unit["fi"])
-                    self.register_table[
-                        self.instructions_to_execute[fu_unit["reserved_by"]][0]
-                    ] = None
-                    self.instruction_table[fu_unit["reserved_by"]]["write"] = lap
-                    self.instruction_table[fu_unit["reserved_by"]]["finished"] = True
-                    dict_now = self.functional_unit_elements.copy()
-                    fu_unit = dict_now
-                    self.functional_unit_table[fu][idx] = fu_unit
-
-    def reset_state_to_next_lap(self):
+    def reset_state_to_next_cycle(self):
         """Reset needed states to begin a new cycle"""
+        self.issue_done_flag = False
         for instruction in self.instruction_table.values():
             instruction["processed"] = False
 
@@ -313,18 +251,19 @@ class ScoreboardingSIM:
         return False
 
     def loop(self):
-        lap = 1
+        self.issue_done_flag = False
+        cycle = 1
         while self.check_if_pipeline_is_finished():
-            self.issue_stage(lap)
-            self.read_stage(lap)
-            self.execute_stage(lap)
-            self.write_stage(lap)
-            self.reset_state_to_next_lap()
-            print(self.register_table)
-            lap += 1
-            # print(lap)
-            # if lap > 15:
-            #     break
+            for instruction in self.instruction_table.keys():
+                self.issue_stage(cycle, instruction)
+                # self.read_stage(cycle, instruction)
+                # self.execute_stage(cycle, instruction)
+                # self.write_stage(cycle, instruction)
+            self.reset_state_to_next_cycle()
+            cycle += 1
+            # print(cycle)
+            if cycle > 6:
+                break
 
     def build_table_from_array(self) -> pd.DataFrame:
         """Build a pandas DtaFrame form an array"""
@@ -345,3 +284,5 @@ if __name__ == "__main__":
     obj.execute()
     print(obj.instructions_to_execute)
     print(obj.instruction_table)
+    print(obj.functional_unit_table)
+    print(obj.register_table)

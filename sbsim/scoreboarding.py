@@ -181,11 +181,6 @@ class ScoreboardingSIM:
                 continue
             # All checks done, now we can issu o/
 
-            # Start by requesting the dest register in register table
-
-            if dest_register is not None:
-                self.register_table[dest_register] = instruction
-
             # Now the functional Unit table
             self.functional_unit_table[raw_functional_unit][idx][
                 "reserved_by"
@@ -219,6 +214,10 @@ class ScoreboardingSIM:
             else:
                 self.functional_unit_table[raw_functional_unit][idx]["rk"] = 1
 
+            # Request the dest register in register table
+            if dest_register is not None:
+                self.register_table[dest_register] = instruction
+
             # Instruction table
             self.instruction_table[instruction]["issue"] = cycle
             self.instruction_table[instruction]["processed"] = True
@@ -226,9 +225,29 @@ class ScoreboardingSIM:
             # Set the flag to tell that one instruction already issued this cycle
             self.issue_done_flag = True
 
-    def read_stage(self, cycle: int) -> None:
+    def read_stage(self, cycle: int, instruction: str) -> None:
         """Process the read stage. Check if rk and rj are both 1, and make the reading if so"""
-        pass
+        raw_functional_unit = self.get_fu_from_inst(instruction)
+        if self.instruction_table[instruction]["read"] is not None:
+            #  Read already occured, skip this one
+            return
+        if self.instruction_table[instruction]["processed"]:
+            # This instruction already processed this cycle
+            return
+        for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
+            if instruction != fu["reserved_by"]:
+                continue
+            if fu["rj"] != 1 or fu["rk"] != 1:
+                self.instruction_table[instruction]["processed"] = True
+                break
+            # If we reached here, everything is fine and we can read
+
+            # Update functional unit table
+            self.functional_unit_table[raw_functional_unit][idx]["rj"] = 0
+            self.functional_unit_table[raw_functional_unit][idx]["rk"] = 0
+
+            # Update instruction table
+            self.instruction_table[instruction]["read"] = cycle
 
     def execute_stage(self, cycle: int) -> None:
         """Process the execution stage. Check the number of cycles needed for each F.U. and keep executing until reach this number of cycles"""
@@ -256,7 +275,7 @@ class ScoreboardingSIM:
         while self.check_if_pipeline_is_finished():
             for instruction in self.instruction_table.keys():
                 self.issue_stage(cycle, instruction)
-                # self.read_stage(cycle, instruction)
+                self.read_stage(cycle, instruction)
                 # self.execute_stage(cycle, instruction)
                 # self.write_stage(cycle, instruction)
             self.reset_state_to_next_cycle()

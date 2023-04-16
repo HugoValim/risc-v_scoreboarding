@@ -33,6 +33,24 @@ class ScoreboardingSIM:
         self.build_status()
         self.loop()
 
+    @staticmethod
+    def add_prefix_to_instructions(
+        instruction_now: str, current_instructions: dict
+    ) -> str:
+        """Add a prefix to every instruction to indentify different ones in the execution"""
+        idx = 0
+        prefix = "_"
+        for instruction in current_instructions.keys():
+            if instruction_now == instruction.split("_")[0]:
+                idx += 1
+        instruction_idx = instruction_now + prefix + str(idx)
+        return instruction_idx
+
+    @staticmethod
+    def remove_instruction_idx(instruction: str):
+        """Get only the raw name of the instruction without its index"""
+        return instruction.split("_")[0]
+
     def parse_file(self) -> tuple[dict, dict]:
         """Parse inputed file and build attributes"""
         functional_units_config = {}
@@ -48,7 +66,6 @@ class ScoreboardingSIM:
                     functional_units_config[fields[0]]["n_cycles"] = int(fields[2])
                     continue
                 elif fields[0].lower() in self.OPCODE_MAP:
-                    # OVERWRITING INSTRUCTIONS!B
                     parsed_regs = []
                     for reg in fields[1:]:
                         if "(" in reg:
@@ -56,10 +73,13 @@ class ScoreboardingSIM:
                                 0
                             ]  # Get only the reg and dont care for the displacement
                         parsed_regs.append(reg)
-                    instructions_to_execute[fields[0]] = parsed_regs
-                    if len(instructions_to_execute[fields[0]]) == 2:
-                        instructions_to_execute[fields[0]].append(None)
-            print(instructions_to_execute)
+                    instruction_with_index = self.add_prefix_to_instructions(
+                        fields[0], instructions_to_execute
+                    )
+                    instructions_to_execute[instruction_with_index] = parsed_regs
+                    if len(instructions_to_execute[instruction_with_index]) == 2:
+                        instructions_to_execute[instruction_with_index].append(None)
+
             return functional_units_config, instructions_to_execute
 
     def build_table_from_array(self) -> pd.DataFrame:
@@ -127,7 +147,9 @@ class ScoreboardingSIM:
             if self.instruction_table[instruction]["issue"] is not None:
                 #  Issue already occured, skip this one
                 continue
-            for fu in self.functional_unit_table[self.OPCODE_MAP[instruction]]:
+            for fu in self.functional_unit_table[
+                self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
+            ]:
                 if (
                     self.register_table[self.instructions_to_execute[instruction][0]]
                     is not None

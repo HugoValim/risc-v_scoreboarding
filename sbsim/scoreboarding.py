@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 
 import pandas as pd
+import numpy as np
 
 
 class ScoreboardingSIM:
@@ -25,6 +26,7 @@ class ScoreboardingSIM:
 
     def __init__(self, file_path: os.path) -> None:
         self.file = file_path
+        self.print_each_stage = True
 
     def execute(self):
         """Method to execute the simultor"""
@@ -401,15 +403,19 @@ class ScoreboardingSIM:
 
             self.update_source_registers()
             self.reset_state_to_next_cycle()
+            if self.print_each_stage:
+                print(self.build_table_from_array())
             cycle += 1
 
     def build_table_from_array(self) -> pd.DataFrame:
         """Build a pandas DtaFrame form an array"""
-        stages = ["issue", "read", "ex", "write", "processed"]
         instructions = [i for i in self.instructions_to_execute.keys()]
-        initialize_w_none = [None for i in range(len(instructions))]
         table = {"instruction": instructions}
-        table_stages = {stage: initialize_w_none for stage in stages}
+        stages = {"issue": [], "read": [], "ex": [], "write": []}
+        for instruction in instructions:
+            for stage in stages.keys():
+                stages[stage].append(str(self.instruction_table[instruction][stage]))
+        table_stages = {stage: stages[stage] for stage in stages}
         table.update(table_stages)
         return pd.DataFrame(table)
 
@@ -420,7 +426,4 @@ if __name__ == "__main__":
     test_1_path = os.path.join(dir_path, file_rel_path)
     obj = ScoreboardingSIM(test_1_path)
     obj.execute()
-    print(obj.instructions_to_execute)
-    print(obj.instruction_table)
-    print(obj.functional_unit_table)
-    print(obj.register_table)
+    print(obj.build_table_from_array())

@@ -178,9 +178,11 @@ class ScoreboardingSIM:
             source_register_2_idx
         ]
         raw_functional_unit = self.get_fu_from_inst(instruction)
+        if self.instruction_before_issue_state != "done":
+            return
         if self.issue_done_flag:
             return
-        if self.instruction_table[instruction]["issue"] is not None:
+        if self.instruction_table[instruction]["issue_state"] == "done":
             #  Issue already occured, skip this one
             return
         if dest_register is not None:
@@ -188,6 +190,7 @@ class ScoreboardingSIM:
                 #  Dest register is busy
                 self.issue_done_flag = True
                 return
+
         for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
             if fu["busy"]:
                 # Functional Unit already in use
@@ -328,7 +331,6 @@ class ScoreboardingSIM:
         if not check_source_register(dest_register):
             return
 
-        default_functional_unit_table = self.build_functional_unit_status()
         for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
             if instruction != fu["reserved_by"]:
                 # Not the unit that is being used by this instruction
@@ -336,13 +338,10 @@ class ScoreboardingSIM:
             if not fu["finished"]:
                 # Execute not finished yet
                 return
-            self.functional_unit_table[raw_functional_unit][
-                idx
-            ] = default_functional_unit_table[raw_functional_unit][idx]
+            self.reset_fu.append((raw_functional_unit, idx))
 
         # Interact with register table
-        self.registers_to_update.append(dest_register)
-        self.register_table[dest_register] = None  # Register is not reserved anymore
+        self.registers_to_update.append((dest_register, instruction))
 
         # Update instruction table:
         self.instruction_table[instruction]["write"] = cycle
@@ -352,19 +351,26 @@ class ScoreboardingSIM:
     def update_source_registers(self) -> None:
         """Update the source register, sending the message that the source operand is now available"""
         for reg in self.registers_to_update:
+            self.register_table[reg[0]] = None  # Register is not reserved anymore
             for fu in self.functional_unit_table.keys():
                 for idx, fu_unit in enumerate(self.functional_unit_table[fu]):
-                    if reg == fu_unit["qj"]:
-                        self.functional_unit_table[fu][idx]["rj"] == 1
-                    if reg == fu_unit["qk"]:
-                        self.functional_unit_table[fu][idx]["rk"] == 1
+                    if reg[1] == fu_unit["qj"]:
+                        self.functional_unit_table[fu][idx]["rj"] = 1
+                    if reg[1] == fu_unit["qk"]:
+                        self.functional_unit_table[fu][idx]["rk"] = 1
 
     def reset_state_to_next_cycle(self):
         """Reset needed states to begin a new cycle"""
         self.issue_done_flag = False
         self.registers_to_update = []
+        default_functional_unit_table = self.build_functional_unit_status()
+        for fu in self.reset_fu:
+            self.functional_unit_table[fu[0]][fu[1]] = default_functional_unit_table[
+                fu[0]
+            ][fu[1]]
         for instruction in self.instruction_table.values():
             instruction["processed"] = False
+        self.reset_fu = []
 
     def check_if_pipeline_is_finished(self):
         for instruction in self.instruction_table.values():
@@ -374,22 +380,28 @@ class ScoreboardingSIM:
 
     def loop(self):
         self.issue_done_flag = False
+        self.instruction_before_issue_state = "done"
         self.registers_to_update = []
+        self.reset_fu = []
         cycle = 1
         while self.check_if_pipeline_is_finished():
             for instruction in self.instruction_table.keys():
                 if self.instruction_table[instruction]["finished"]:
+                    self.instruction_before_issue_state = self.instruction_table[
+                        instruction
+                    ]["issue_state"]
                     continue
                 self.issue_stage(cycle, instruction)
                 self.read_stage(cycle, instruction)
                 self.execute_stage(cycle, instruction)
                 self.write_stage(cycle, instruction)
-            # self.update_source_registers()
+                self.instruction_before_issue_state = self.instruction_table[
+                    instruction
+                ]["issue_state"]
+
+            self.update_source_registers()
             self.reset_state_to_next_cycle()
             cycle += 1
-            # print(cycle)
-            if cycle > 10:
-                break
 
     def build_table_from_array(self) -> pd.DataFrame:
         """Build a pandas DtaFrame form an array"""

@@ -99,7 +99,18 @@ class ScoreboardingSIM:
     def build_instruction_status(self) -> None:
         """Build instruction table based in the inputed instructions"""
         self.instruction_table = {}
-        stages = ["issue", "read", "ex", "write", "processed", "finished"]
+        stages = [
+            "issue",
+            "read",
+            "ex",
+            "write",
+            "processed",
+            "finished",
+            "issue_state",
+            "read_state",
+            "ex_state",
+            "write_state",
+        ]
         instructions = [i for i in self.instructions_to_execute.keys()]
         for instruction in instructions:
             self.instruction_table[instruction] = {}
@@ -222,6 +233,7 @@ class ScoreboardingSIM:
 
             # Instruction table
             self.instruction_table[instruction]["issue"] = cycle
+            self.instruction_table[instruction]["issue_state"] = "done"
             self.instruction_table[instruction]["processed"] = True
 
             # Set the flag to tell that one instruction already issued this cycle
@@ -230,7 +242,10 @@ class ScoreboardingSIM:
     def read_stage(self, cycle: int, instruction: str) -> None:
         """Process the read stage. Check if rk and rj are both 1, and make the reading if so"""
         raw_functional_unit = self.get_fu_from_inst(instruction)
-        if self.instruction_table[instruction]["read"] is not None:
+        if self.instruction_table[instruction]["issue_state"] != "done":
+            #  Issue didn't even occured yet
+            return
+        if self.instruction_table[instruction]["read_state"] == "done":
             #  Read already occured, skip this one
             return
         if self.instruction_table[instruction]["processed"]:
@@ -252,10 +267,17 @@ class ScoreboardingSIM:
             # Update instruction table
             self.instruction_table[instruction]["processed"] = True
             self.instruction_table[instruction]["read"] = cycle
+            self.instruction_table[instruction]["read_state"] = "done"
 
     def execute_stage(self, cycle: int, instruction: str) -> None:
         """Process the execution stage. Check the number of cycles needed for each F.U. and keep executing until reach this number of cycles"""
         raw_functional_unit = self.get_fu_from_inst(instruction)
+        if self.instruction_table[instruction]["read_state"] != "done":
+            #  Issue didn't even occured yet
+            return
+        if self.instruction_table[instruction]["ex_state"] == "done":
+            #  Read already occured, skip this one
+            return
         if self.instruction_table[instruction]["processed"]:
             # This instruction already processed this cycle
             return
@@ -268,7 +290,6 @@ class ScoreboardingSIM:
                 continue
             # If we reached here, everything is fine and we can execute
             # Update instruction table:
-            print("Heree")
             self.instruction_table[instruction]["ex"] = cycle
             self.instruction_table[instruction]["processed"] = True
 
@@ -276,14 +297,72 @@ class ScoreboardingSIM:
             self.functional_unit_table[raw_functional_unit][idx]["done_cycles"] += 1
             if fu["done_cycles"] == fu["n_cycles"]:
                 self.functional_unit_table[raw_functional_unit][idx]["finished"] = True
+                self.instruction_table[instruction]["ex_state"] = "done"
 
-    def write_stage(self, cycle: int) -> None:
+    def write_stage(self, cycle: int, instruction: str) -> None:
         """Process the write stage. Checks to see if the value calculated in the execute stage can be written (Avoid WAR hazard)."""
-        pass
+        dest_register_idx = 0
+        raw_functional_unit = self.get_fu_from_inst(instruction)
+        dest_register = self.instructions_to_execute[instruction][dest_register_idx]
+
+        if self.instruction_table[instruction]["ex_state"] != "done":
+            #  Ex didn't even occured yet
+            return
+        if self.instruction_table[instruction]["write_state"] == "done":
+            #  Read already occured, skip this one
+            return
+
+        def check_source_register(reg: str) -> bool:
+            """Method to check if a destination register is source for a instruction, return true if it can proceed"""
+            for fu in self.functional_unit_table.keys():
+                for fu_unit in self.functional_unit_table[fu]:
+                    if reg == fu_unit["qj"] and fu_unit["rj"] == 1:
+                        return False
+                    if reg == fu_unit["qk"] and fu_unit["rk"] == 1:
+                        return False
+            return True
+
+        if self.instruction_table[instruction]["processed"]:
+            # This instruction already processed this cycle
+            return
+        if not check_source_register(dest_register):
+            return
+
+        default_functional_unit_table = self.build_functional_unit_status()
+        for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
+            if instruction != fu["reserved_by"]:
+                # Not the unit that is being used by this instruction
+                continue
+            if not fu["finished"]:
+                # Execute not finished yet
+                return
+            self.functional_unit_table[raw_functional_unit][
+                idx
+            ] = default_functional_unit_table[raw_functional_unit][idx]
+
+        # Interact with register table
+        self.registers_to_update.append(dest_register)
+        self.register_table[dest_register] = None  # Register is not reserved anymore
+
+        # Update instruction table:
+        self.instruction_table[instruction]["write"] = cycle
+        self.instruction_table[instruction]["write_status"] = "done"
+        self.instruction_table[instruction]["finished"] = True
+
+    def update_source_registers(self) -> None:
+        """Update the source register, sending the message that the source operand is now available"""
+        for reg in self.registers_to_update:
+            for fu in self.functional_unit_table.keys():
+                for idx, fu_unit in enumerate(self.functional_unit_table[fu]):
+                    if reg == fu_unit["qj"]:
+                        self.functional_unit_table[fu][idx]["rj"] == 1
+                    if reg == fu_unit["qk"]:
+                        self.functional_unit_table[fu][idx]["rk"] == 1
 
     def reset_state_to_next_cycle(self):
         """Reset needed states to begin a new cycle"""
         self.issue_done_flag = False
+        self.registers_to_update = []
         for instruction in self.instruction_table.values():
             instruction["processed"] = False
 
@@ -295,13 +374,17 @@ class ScoreboardingSIM:
 
     def loop(self):
         self.issue_done_flag = False
+        self.registers_to_update = []
         cycle = 1
         while self.check_if_pipeline_is_finished():
             for instruction in self.instruction_table.keys():
+                if self.instruction_table[instruction]["finished"]:
+                    continue
                 self.issue_stage(cycle, instruction)
                 self.read_stage(cycle, instruction)
                 self.execute_stage(cycle, instruction)
-                # self.write_stage(cycle, instruction)
+                self.write_stage(cycle, instruction)
+            # self.update_source_registers()
             self.reset_state_to_next_cycle()
             cycle += 1
             # print(cycle)

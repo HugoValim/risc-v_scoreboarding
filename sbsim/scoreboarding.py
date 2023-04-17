@@ -90,6 +90,12 @@ class ScoreboardingSIM:
 
             return functional_units_config, instructions_to_execute
 
+    def build_status(self):
+        """Build all needed status table"""
+        self.build_instruction_status()
+        self.functional_unit_table = self.build_functional_unit_status()
+        self.build_register_status()
+
     def build_instruction_status(self) -> None:
         """Build instruction table based in the inputed instructions"""
         self.instruction_table = {}
@@ -123,14 +129,16 @@ class ScoreboardingSIM:
 
     def build_functional_unit_status(self) -> None:
         """Build functional unit table based in the inputed Functional Units"""
-        self.functional_unit_table = {}
+        functional_unit_table = {}
         for fu in self.functional_units_config.keys():
-            self.functional_unit_table[fu] = []
+            functional_unit_table[fu] = []
             for i in range(self.functional_units_config[fu]["n_units"]):
-                self.functional_unit_table[fu].append(self.create_default_fu())
-                self.functional_unit_table[fu][i][
-                    "n_cycles"
-                ] = self.functional_units_config[fu]["n_cycles"]
+                functional_unit_table[fu].append(self.create_default_fu())
+                functional_unit_table[fu][i]["n_cycles"] = self.functional_units_config[
+                    fu
+                ]["n_cycles"]
+                functional_unit_table[fu][i]["done_cycles"] = 0
+        return functional_unit_table
 
     def build_register_status(self, regr: int = 32, regf: int = 32) -> None:
         """Build register table based in the inputed Functional Units"""
@@ -145,12 +153,6 @@ class ScoreboardingSIM:
             self.register_table[
                 self.REG_PREFIXES["float"] + str(reg_idx)
             ] = None  # Start all registers with 0
-
-    def build_status(self):
-        """Build all needed status table"""
-        self.build_instruction_status()
-        self.build_functional_unit_status()
-        self.build_register_status()
 
     def issue_stage(self, cycle: int, instruction: str) -> None:
         """Process the issue stage, making the needed check, basically the required F.U. mustn't busy and the dest register must no be free (avoiding WAW hazard)"""
@@ -236,6 +238,7 @@ class ScoreboardingSIM:
             return
         for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
             if instruction != fu["reserved_by"]:
+                # Not the unit that is being used by this instruction
                 continue
             if fu["rj"] != 1 or fu["rk"] != 1:
                 self.instruction_table[instruction]["processed"] = True
@@ -247,11 +250,32 @@ class ScoreboardingSIM:
             self.functional_unit_table[raw_functional_unit][idx]["rk"] = 0
 
             # Update instruction table
+            self.instruction_table[instruction]["processed"] = True
             self.instruction_table[instruction]["read"] = cycle
 
-    def execute_stage(self, cycle: int) -> None:
+    def execute_stage(self, cycle: int, instruction: str) -> None:
         """Process the execution stage. Check the number of cycles needed for each F.U. and keep executing until reach this number of cycles"""
-        pass
+        raw_functional_unit = self.get_fu_from_inst(instruction)
+        if self.instruction_table[instruction]["processed"]:
+            # This instruction already processed this cycle
+            return
+        for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
+            if instruction != fu["reserved_by"]:
+                # Not the unit that is being used by this instruction
+                continue
+            if fu["finished"]:
+                # Already fininished this unit
+                continue
+            # If we reached here, everything is fine and we can execute
+            # Update instruction table:
+            print("Heree")
+            self.instruction_table[instruction]["ex"] = cycle
+            self.instruction_table[instruction]["processed"] = True
+
+            # Update functional unit table
+            self.functional_unit_table[raw_functional_unit][idx]["done_cycles"] += 1
+            if fu["done_cycles"] == fu["n_cycles"]:
+                self.functional_unit_table[raw_functional_unit][idx]["finished"] = True
 
     def write_stage(self, cycle: int) -> None:
         """Process the write stage. Checks to see if the value calculated in the execute stage can be written (Avoid WAR hazard)."""
@@ -276,12 +300,12 @@ class ScoreboardingSIM:
             for instruction in self.instruction_table.keys():
                 self.issue_stage(cycle, instruction)
                 self.read_stage(cycle, instruction)
-                # self.execute_stage(cycle, instruction)
+                self.execute_stage(cycle, instruction)
                 # self.write_stage(cycle, instruction)
             self.reset_state_to_next_cycle()
             cycle += 1
             # print(cycle)
-            if cycle > 6:
+            if cycle > 10:
                 break
 
     def build_table_from_array(self) -> pd.DataFrame:

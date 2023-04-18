@@ -1,0 +1,1 @@
+from .scoreboarding import main

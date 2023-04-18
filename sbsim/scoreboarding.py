@@ -67,7 +67,7 @@ class ScoreboardingSIM:
         for file in self.files:
             with open(file, "r") as f:
                 for line in f:
-                    striped_line = line.strip()
+                    striped_line = line.strip().lower()
                     if not striped_line:  # Skip blank lines
                         continue
                     data.append(striped_line)
@@ -97,11 +97,11 @@ class ScoreboardingSIM:
                 )
                 instructions_to_execute[instruction_with_index] = parsed_regs
                 if len(instructions_to_execute[instruction_with_index]) == 2:
-                    if "sd" in instruction_with_index:
+                    if "sd" in instruction_with_index or "sw" in instruction_with_index:
                         instructions_to_execute[instruction_with_index].insert(0, None)
                     else:
                         instructions_to_execute[instruction_with_index].append(None)
-
+        print(functional_units_config, instructions_to_execute)
         return functional_units_config, instructions_to_execute
 
     def build_status(self):
@@ -325,12 +325,12 @@ class ScoreboardingSIM:
             return
 
         def check_source_register(reg: str) -> bool:
-            """Method to check if a destination register is source for a instruction, return true if it can proceed"""
+            """Method to check if a destination register is source for a instruction, return true if it can proceed avoiding WAR hazard"""
             for fu in self.functional_unit_table.keys():
                 for fu_unit in self.functional_unit_table[fu]:
-                    if reg == fu_unit["qj"] and fu_unit["rj"] == 1:
+                    if reg == fu_unit["fj"] and fu_unit["rj"] == 1:
                         return False
-                    if reg == fu_unit["qk"] and fu_unit["rk"] == 1:
+                    if reg == fu_unit["fk"] and fu_unit["rk"] == 1:
                         return False
             return True
 

@@ -101,7 +101,6 @@ class ScoreboardingSIM:
                         instructions_to_execute[instruction_with_index].insert(0, None)
                     else:
                         instructions_to_execute[instruction_with_index].append(None)
-        print(functional_units_config, instructions_to_execute)
         return functional_units_config, instructions_to_execute
 
     def build_status(self):

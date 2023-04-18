@@ -1,6 +1,7 @@
 import os
 
 import pandas as pd
+from tabulate import tabulate
 
 
 class ScoreboardingSIM:
@@ -29,13 +30,21 @@ class ScoreboardingSIM:
     def execute(self):
         """Method to execute the simulator"""
         file_data = self.get_inputed_files_data()
-        self.functional_units_config, self.instructions_to_execute = self.parse_file(
-            file_data
-        )
+        (
+            self.functional_units_config,
+            self.instructions_to_execute,
+            self.raw_instructions,
+        ) = self.parse_file(file_data)
         self.build_status()
         self.loop()
         if not self.print_each_stage:
-            print(self.build_table_from_array())
+            self.pretty_print(self.build_table_from_array())
+
+    @staticmethod
+    def pretty_print(print_word) -> None:
+        """Just a pretty print"""
+        print()
+        print(print_word)
 
     @staticmethod
     def add_prefix_to_instructions(
@@ -71,10 +80,11 @@ class ScoreboardingSIM:
                     data.append(striped_line)
         return data
 
-    def parse_file(self, file_data: str) -> tuple[dict, dict]:
+    def parse_file(self, file_data: str) -> tuple[dict, dict, list]:
         """Parse inputed information and build functional units and instructions config"""
         functional_units_config = {}
         instructions_to_execute = {}
+        raw_instructions = []
         for info in file_data:
             fields = info.replace(",", " ").split()
             if fields[0].lower() in self.FUNCTIONAL_UNITS:
@@ -83,6 +93,7 @@ class ScoreboardingSIM:
                 functional_units_config[fields[0]]["n_cycles"] = int(fields[2])
                 continue
             elif fields[0].lower() in self.OPCODE_MAP:
+                raw_instructions.append(fields)
                 parsed_regs = []
                 for reg in fields[1:]:
                     if "(" in reg:
@@ -99,7 +110,7 @@ class ScoreboardingSIM:
                         instructions_to_execute[instruction_with_index].insert(0, None)
                     else:
                         instructions_to_execute[instruction_with_index].append(None)
-        return functional_units_config, instructions_to_execute
+        return functional_units_config, instructions_to_execute, raw_instructions
 
     def build_status(self):
         """Build all needed status table"""
@@ -411,20 +422,29 @@ class ScoreboardingSIM:
             self.update_source_registers()
             self.reset_state_to_next_cycle()
             if self.print_each_stage:
-                print(self.build_table_from_array())
+                self.pretty_print(self.build_table_from_array())
             cycle += 1
 
     def build_table_from_array(self) -> pd.DataFrame:
         """Build a pandas DtaFrame form an array"""
-        instructions = [i for i in self.instructions_to_execute.keys()]
+
+        def join_raw_instructions(inst: list) -> str:
+            """Rebuild raw instruction for pretty print"""
+            return_str = inst[0] + " " + inst[1] + ", " + inst[2]
+            if len(inst) == 4:
+                return_str += ", " + inst[3]
+            return return_str
+
+        instructions = [join_raw_instructions(i) for i in self.raw_instructions]
         table = {"instruction": instructions}
         stages = {"issue": [], "read": [], "ex": [], "write": []}
-        for instruction in instructions:
+        for instruction in self.instructions_to_execute.keys():
             for stage in stages.keys():
                 stages[stage].append(str(self.instruction_table[instruction][stage]))
         table_stages = {stage: stages[stage] for stage in stages}
         table.update(table_stages)
-        return pd.DataFrame(table)
+        df = pd.DataFrame(table)
+        return tabulate(df, showindex=False, headers=df.columns)
 
 
 def main() -> None:

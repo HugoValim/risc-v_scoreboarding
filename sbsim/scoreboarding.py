@@ -1,8 +1,6 @@
 import os
-from dataclasses import dataclass
 
 import pandas as pd
-import numpy as np
 
 
 class ScoreboardingSIM:
@@ -74,7 +72,7 @@ class ScoreboardingSIM:
         return data
 
     def parse_file(self, file_data: str) -> tuple[dict, dict]:
-        """Parse inputed file and build functional units and instructions config"""
+        """Parse inputed information and build functional units and instructions config"""
         functional_units_config = {}
         instructions_to_execute = {}
         for info in file_data:
@@ -109,6 +107,28 @@ class ScoreboardingSIM:
         self.functional_unit_table = self.build_functional_unit_status()
         self.build_register_status()
 
+    def create_default_fus(self) -> dict:
+        """Create a default empy F.U. table, this is used to build the first table and also to reset a F.U. to default when it is finished"""
+        return_value = {}
+        functional_unit_elements = [
+            "busy",
+            "op",
+            "fi",
+            "fj",
+            "fk",
+            "qj",
+            "qk",
+            "rj",
+            "rk",
+            "reserved_by",
+            "n_cycles",
+            "done_cycles",
+            "finished",
+        ]
+        for i in functional_unit_elements:
+            return_value[i] = None
+        return return_value
+
     def build_instruction_status(self) -> None:
         """Build instruction table based in the inputed instructions"""
         self.instruction_table = {}
@@ -130,34 +150,13 @@ class ScoreboardingSIM:
             for i in stages:
                 self.instruction_table[instruction][i] = None
 
-    def create_default_fu(self):
-        return_value = {}
-        functional_unit_elements = [
-            "busy",
-            "op",
-            "fi",
-            "fj",
-            "fk",
-            "qj",
-            "qk",
-            "rj",
-            "rk",
-            "reserved_by",
-            "n_cycles",
-            "done_cycles",
-            "finished",
-        ]
-        for i in functional_unit_elements:
-            return_value[i] = None
-        return return_value
-
-    def build_functional_unit_status(self) -> None:
+    def build_functional_unit_status(self) -> dict:
         """Build functional unit table based in the inputed Functional Units"""
         functional_unit_table = {}
         for fu in self.functional_units_config.keys():
             functional_unit_table[fu] = []
             for i in range(self.functional_units_config[fu]["n_units"]):
-                functional_unit_table[fu].append(self.create_default_fu())
+                functional_unit_table[fu].append(self.create_default_fus())
                 functional_unit_table[fu][i]["n_cycles"] = self.functional_units_config[
                     fu
                 ]["n_cycles"]
@@ -173,7 +172,7 @@ class ScoreboardingSIM:
             self.register_table[self.REG_PREFIXES["float"] + str(i)] = None
 
     def issue_stage(self, cycle: int, instruction: str) -> None:
-        """Process the issue stage, making the needed check, basically the required F.U. mustn't busy and the dest register must no be free (avoiding WAW hazard)"""
+        """Process the issue stage, making the needed check, basically the required F.U. mustn't be busy and the dest register must no be free (avoiding WAW hazard)"""
         dest_register_idx = 0
         source_register_1_idx = 1
         source_register_2_idx = 2
@@ -380,13 +379,15 @@ class ScoreboardingSIM:
             instruction["processed"] = False
         self.reset_fu = []
 
-    def check_if_pipeline_is_finished(self):
+    def check_if_pipeline_is_finished(self) -> bool:
+        """Method to check if all instructions are done processing"""
         for instruction in self.instruction_table.values():
             if not instruction["finished"]:
                 return True
         return False
 
     def loop(self):
+        """loop between instructions to process them using the scoreboarding techinique"""
         self.issue_done_flag = False
         self.instruction_before_issue_state = "done"
         self.registers_to_update = []

@@ -1,6 +1,8 @@
 # This is a simulator for out of order execution of RISC-V assembly
 
-## The easiest way to use this project is clonning it and ### pip installing the project:
+## The easiest way to use this project is clonning it and
+
+### pip installing the project:
 ```
     git clone https://github.com/HugoValim/risc-v_scoreboarding
     pip install -e risc-v_scoreboarding

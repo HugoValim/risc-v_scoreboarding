@@ -31,7 +31,9 @@ class ScoreboardingSIM:
     def execute(self):
         """Method to execute the simulator"""
         file_data = self.get_inputed_files_data()
-        self.functional_units_config, self.instructions_to_execute = self.parse_file(file_data)
+        self.functional_units_config, self.instructions_to_execute = self.parse_file(
+            file_data
+        )
         self.build_status()
         self.loop()
         if not self.print_each_stage:
@@ -96,9 +98,7 @@ class ScoreboardingSIM:
                 instructions_to_execute[instruction_with_index] = parsed_regs
                 if len(instructions_to_execute[instruction_with_index]) == 2:
                     if "sd" in instruction_with_index:
-                        instructions_to_execute[instruction_with_index].insert(
-                            0, None
-                        )
+                        instructions_to_execute[instruction_with_index].insert(0, None)
                     else:
                         instructions_to_execute[instruction_with_index].append(None)
 
@@ -169,13 +169,9 @@ class ScoreboardingSIM:
         """Build register table based in the inputed Functional Units"""
         self.register_table = {}
         for i in range(regr):
-            self.register_table[
-                self.REG_PREFIXES["int"] + str(i)
-            ] = None
+            self.register_table[self.REG_PREFIXES["int"] + str(i)] = None
         for i in range(regf):
-            self.register_table[
-                self.REG_PREFIXES["float"] + str(i)
-            ] = None
+            self.register_table[self.REG_PREFIXES["float"] + str(i)] = None
 
     def issue_stage(self, cycle: int, instruction: str) -> None:
         """Process the issue stage, making the needed check, basically the required F.U. mustn't busy and the dest register must no be free (avoiding WAW hazard)"""
@@ -202,7 +198,7 @@ class ScoreboardingSIM:
                 #  Dest register is busy
                 self.issue_done_flag = True
                 return
-            
+
         for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
             if fu["busy"]:
                 # Functional Unit already in use
@@ -431,9 +427,31 @@ class ScoreboardingSIM:
         return pd.DataFrame(table)
 
 
-if __name__ == "__main__":
+def main() -> None:
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    file_rel_path = "tests/data/test_1.txt"
-    test_1_path = os.path.join(dir_path, file_rel_path)
+
+    # First test
+    test_1_path = "tests/data/test_1.txt"
+    test_1_path = os.path.join(dir_path, test_1_path)
     obj = ScoreboardingSIM([test_1_path], False)
     obj.execute()
+
+    # Second test
+    test_2a_path = "tests/data/test_2_a.txt"
+    test_2b_path = "tests/data/test_2_b.txt"
+    test_2a_path = os.path.join(dir_path, test_2a_path)
+    test_2b_path = os.path.join(dir_path, test_2b_path)
+    obj = ScoreboardingSIM([test_2a_path, test_2b_path], False)
+    obj.execute()
+
+    # Third
+    test_3a_path = "tests/data/test_3_a.txt"
+    test_3b_path = "tests/data/test_3_b.txt"
+    test_3a_path = os.path.join(dir_path, test_3a_path)
+    test_3b_path = os.path.join(dir_path, test_3b_path)
+    obj = ScoreboardingSIM([test_3a_path, test_3b_path], False)
+    obj.execute()
+
+
+if __name__ == "__main__":
+    main()

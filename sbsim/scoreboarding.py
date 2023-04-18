@@ -169,15 +169,13 @@ class ScoreboardingSIM:
         """Build register table based in the inputed Functional Units"""
         self.register_table = {}
         for i in range(regr):
-            reg_idx = i + 1
             self.register_table[
-                self.REG_PREFIXES["int"] + str(reg_idx)
-            ] = None  # Start all registers with 0
+                self.REG_PREFIXES["int"] + str(i)
+            ] = None
         for i in range(regf):
-            reg_idx = i + 1
             self.register_table[
-                self.REG_PREFIXES["float"] + str(reg_idx)
-            ] = None  # Start all registers with 0
+                self.REG_PREFIXES["float"] + str(i)
+            ] = None
 
     def issue_stage(self, cycle: int, instruction: str) -> None:
         """Process the issue stage, making the needed check, basically the required F.U. mustn't busy and the dest register must no be free (avoiding WAW hazard)"""

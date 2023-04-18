@@ -204,7 +204,7 @@ class ScoreboardingSIM:
                 #  Dest register is busy
                 self.issue_done_flag = True
                 return
-
+            
         for idx, fu in enumerate(self.functional_unit_table[raw_functional_unit]):
             if fu["busy"]:
                 # Functional Unit already in use
@@ -255,6 +255,7 @@ class ScoreboardingSIM:
 
             # Set the flag to tell that one instruction already issued this cycle
             self.issue_done_flag = True
+            break
 
     def read_stage(self, cycle: int, instruction: str) -> None:
         """Process the read stage. Check if rk and rj are both 1, and make the reading if so"""

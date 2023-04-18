@@ -24,15 +24,18 @@ class ScoreboardingSIM:
 
     REG_PREFIXES = {"int": "x", "float": "f"}
 
-    def __init__(self, file_path: os.path) -> None:
-        self.file = file_path
-        self.print_each_stage = True
+    def __init__(self, file_paths: list[os.path], print_each_stage: bool) -> None:
+        self.files = file_paths
+        self.print_each_stage = print_each_stage
 
     def execute(self):
-        """Method to execute the simultor"""
-        self.functional_units_config, self.instructions_to_execute = self.parse_file()
+        """Method to execute the simulator"""
+        file_data = self.get_inputed_files_data()
+        self.functional_units_config, self.instructions_to_execute = self.parse_file(file_data)
         self.build_status()
         self.loop()
+        if not self.print_each_stage:
+            print(self.build_table_from_array())
 
     @staticmethod
     def add_prefix_to_instructions(
@@ -48,7 +51,7 @@ class ScoreboardingSIM:
         return instruction_idx
 
     @staticmethod
-    def remove_instruction_idx(instruction: str):
+    def remove_instruction_idx(instruction: str) -> str:
         """Get only the raw name of the instruction without its index"""
         return instruction.split("_")[0]
 
@@ -56,41 +59,50 @@ class ScoreboardingSIM:
         """Get the functional unit for the given instruction"""
         return self.OPCODE_MAP[self.remove_instruction_idx(instruction)]
 
-    def parse_file(self) -> tuple[dict, dict]:
+    def get_inputed_files_data(self) -> list:
+        """Get the data in the inputed files and return a list with all information"""
+        data = []
+        for file in self.files:
+            with open(file, "r") as f:
+                for line in f:
+                    striped_line = line.strip()
+                    if not striped_line:  # Skip blank lines
+                        continue
+                    data.append(striped_line)
+        return data
+
+    def parse_file(self, file_data: str) -> tuple[dict, dict]:
         """Parse inputed file and build functional units and instructions config"""
         functional_units_config = {}
         instructions_to_execute = {}
-        with open(self.file, "r") as f:
-            for line in f:
-                fields = line.strip().replace(",", " ").split()
-                if not fields:  # Skip blank lines
-                    continue
-                elif fields[0].lower() in self.FUNCTIONAL_UNITS:
-                    functional_units_config[fields[0]] = {}
-                    functional_units_config[fields[0]]["n_units"] = int(fields[1])
-                    functional_units_config[fields[0]]["n_cycles"] = int(fields[2])
-                    continue
-                elif fields[0].lower() in self.OPCODE_MAP:
-                    parsed_regs = []
-                    for reg in fields[1:]:
-                        if "(" in reg:
-                            reg = reg.split("(")[1].split(")")[
-                                0
-                            ]  # Get only the reg and dont care for the displacement
-                        parsed_regs.append(reg)
-                    instruction_with_index = self.add_prefix_to_instructions(
-                        fields[0], instructions_to_execute
-                    )
-                    instructions_to_execute[instruction_with_index] = parsed_regs
-                    if len(instructions_to_execute[instruction_with_index]) == 2:
-                        if "sd" in instruction_with_index:
-                            instructions_to_execute[instruction_with_index].insert(
-                                0, None
-                            )
-                        else:
-                            instructions_to_execute[instruction_with_index].append(None)
+        for info in file_data:
+            fields = info.replace(",", " ").split()
+            if fields[0].lower() in self.FUNCTIONAL_UNITS:
+                functional_units_config[fields[0]] = {}
+                functional_units_config[fields[0]]["n_units"] = int(fields[1])
+                functional_units_config[fields[0]]["n_cycles"] = int(fields[2])
+                continue
+            elif fields[0].lower() in self.OPCODE_MAP:
+                parsed_regs = []
+                for reg in fields[1:]:
+                    if "(" in reg:
+                        reg = reg.split("(")[1].split(")")[
+                            0
+                        ]  # Get only the reg and dont care for the displacement
+                    parsed_regs.append(reg)
+                instruction_with_index = self.add_prefix_to_instructions(
+                    fields[0], instructions_to_execute
+                )
+                instructions_to_execute[instruction_with_index] = parsed_regs
+                if len(instructions_to_execute[instruction_with_index]) == 2:
+                    if "sd" in instruction_with_index:
+                        instructions_to_execute[instruction_with_index].insert(
+                            0, None
+                        )
+                    else:
+                        instructions_to_execute[instruction_with_index].append(None)
 
-            return functional_units_config, instructions_to_execute
+        return functional_units_config, instructions_to_execute
 
     def build_status(self):
         """Build all needed status table"""
@@ -424,6 +436,5 @@ if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
     file_rel_path = "tests/data/test_1.txt"
     test_1_path = os.path.join(dir_path, file_rel_path)
-    obj = ScoreboardingSIM(test_1_path)
+    obj = ScoreboardingSIM([test_1_path], False)
     obj.execute()
-    print(obj.build_table_from_array())

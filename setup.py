@@ -23,9 +23,9 @@ setup(
     # package_data={},
     # include_package_data=True,
     packages=find_packages(where=".", exclude=["test", "test.*", "tests"]),
-    # entry_points={
-    #     "console_scripts": [
-    #         "daf.bounds = daf.command_line.experiment.bounds:main",
-    #     ],
-    # },
+    entry_points={
+        "console_scripts": [
+            "scoreboarding_sim = sbsim.cli_script.run:main",
+        ],
+    },
 )

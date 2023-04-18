@@ -1,1 +1,1 @@
-from .scoreboarding import main
+from .scoreboarding import main, ScoreboardingSIM

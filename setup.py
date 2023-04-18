@@ -17,11 +17,7 @@ setup(
     author="Hugo Campos",
     author_email="hugohevalica@gmail.com",
     url="https://github.com/HugoValim/risc-v_scoreboarding",
-    install_requires=[
-        "pandas",
-    ],
-    # package_data={},
-    # include_package_data=True,
+    install_requires=["pandas", "tabulate"],
     packages=find_packages(where=".", exclude=["test", "test.*", "tests"]),
     entry_points={
         "console_scripts": [

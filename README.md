@@ -15,14 +15,15 @@ main()
 
 ## You can run the code in multiple ways:
 
-
-### By importing and running it:
-```
-import sbsim
-run = sbsim.ScoreboardingSIM([<path to file 1>, <path to file 2>])
-```
-
 ### Via shell, using the command "scoreboarding_sim":
 ```
 scoreboarding_sim test_1.txt test_2.txt -p
 ```
+
+### By importing and running it:
+```
+import sbsim
+run = sbsim.ScoreboardingSIM([<path to file 1>, <path to file 2>], False)
+run.execute()
+```
+

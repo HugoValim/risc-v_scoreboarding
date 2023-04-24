@@ -1,19 +1,2 @@
-h5py
-matplotlib
-numpy
 pandas
-PyYAML
-scipy
-tqdm
-xrayutilities
-pyepics
-# pydm
-# pyqt5
-qdarkstyle
-docker
-kafka-python
-msgpack
-apstools
-bluesky
-ophyd
-lnls-ophyd
+tabulate

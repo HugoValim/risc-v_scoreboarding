@@ -1,29 +1,30 @@
 # This is a simulator for out of order execution of RISC-V assembly
 
-## The easiest way to use this project is clonning it and
+## You can run the code in multiple ways, you all the listed methods above you can input a flag to tell the program if it should print all the stages or just the final result:
 
-### pip installing the project:
+## pip install the project and use the command "scoreboarding_sim". The inputs are the configuration file with instructions and the Functional Units configuration. All the inputed information can be in a single file or spreaded in several, just pay attention to input instruction in the correct order:
 ```
 git clone https://github.com/HugoValim/risc-v_scoreboarding
 pip install -e risc-v_scoreboarding
 ```
-### Run some tests:
-```
-from sbsim import main
-main()
-```
-
-## You can run the code in multiple ways:
-
-### Via shell, using the command "scoreboarding_sim":
+### In shell:
 ```
 scoreboarding_sim test_1.txt test_2.txt -p
 ```
 
-### By importing and running it:
+## Importing the module and use it:
+
+### Run some tests over the data contained in this project in folder risc-v_scoreboarding/sbsim/tests/data/
+```
+from sbsim import main
+main()
+```
+### Import and run you own files with it:
 ```
 import sbsim
 run = sbsim.ScoreboardingSIM([<path to file 1>, <path to file 2>], False)
 run.execute()
 ```
 
+## Or you can just run it from the risc-v_scoreboarding/sbsim/scoreboarding.py file directly
+### You must use the class contained in it to run you files, there is a main function in it with some examples in how to run it

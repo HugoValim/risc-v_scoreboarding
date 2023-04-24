@@ -27,7 +27,7 @@ class ScoreboardingSIM:
         self.files = file_paths
         self.print_each_stage = print_each_stage
 
-    def execute(self):
+    def execute(self) -> None:
         """Method to execute the simulator"""
         file_data = self.get_inputed_files_data()
         (
@@ -42,7 +42,7 @@ class ScoreboardingSIM:
 
     @staticmethod
     def pretty_print(print_word) -> None:
-        """Just a pretty print"""
+        """Just print a line first"""
         print()
         print(print_word)
 
@@ -112,7 +112,7 @@ class ScoreboardingSIM:
                         instructions_to_execute[instruction_with_index].append(None)
         return functional_units_config, instructions_to_execute, raw_instructions
 
-    def build_status(self):
+    def build_status(self) -> None:
         """Build all needed status table"""
         self.build_instruction_status()
         self.functional_unit_table = self.build_functional_unit_status()
@@ -377,7 +377,7 @@ class ScoreboardingSIM:
                     if reg[1] == fu_unit["qk"]:
                         self.functional_unit_table[fu][idx]["rk"] = 1
 
-    def reset_state_to_next_cycle(self):
+    def reset_state_to_next_cycle(self) -> None:
         """Reset needed states to begin a new cycle"""
         self.issue_done_flag = False
         self.registers_to_update = []
@@ -397,7 +397,7 @@ class ScoreboardingSIM:
                 return True
         return False
 
-    def loop(self):
+    def loop(self) -> None:
         """loop between instructions to process them using the scoreboarding techinique"""
         self.issue_done_flag = False
         self.instruction_before_issue_state = "done"

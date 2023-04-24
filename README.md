@@ -30,4 +30,11 @@ run.execute()
 ```
 
 ## Or you can just run it from the risc-v_scoreboarding/sbsim/scoreboarding.py file directly
+
+### Install de requirements:
+
+```
+pip install -r requirements.txt
+```
+
 ### You must use the class contained in it to run your files, there is a main function in it with some examples in how to run it
